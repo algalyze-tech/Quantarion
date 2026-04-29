@@ -3,11 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Quantarion">
     <meta name="theme-color" content="#22c55e">
+    <meta name="description" content="A professional-grade AI assistant with authentication, chat management, voice input, and offline capabilities">
     <link rel="manifest" href="/manifest.json">
-    <link rel="icon" type="image/jpeg" href="https://i.ibb.co/zVHRTfTF/1776703207500-1.jpg">
+    <link rel="icon" type="image/png" href="/icon.png">
+    <link rel="apple-touch-icon" href="/icon.png">
+    <link rel="shortcut icon" href="/icon.png">
     <title>Quantarion AI - Professional Assistant</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
@@ -31,6 +36,9 @@
             background: #0b1016;
             -webkit-user-select: none;
             -webkit-touch-callout: none;
+            position: fixed;
+            top: 0;
+            left: 0;
         }
         
         body {
@@ -865,7 +873,7 @@
             </div>
             <div id="authProfile" style="display:none;">
                 <div style="text-align: center; margin-bottom: 16px;">
-                    <div id="profilePic" style="width: 60px; height: 60px; border-radius: 50%; background: #22c55e; margin: 0 auto 10px; display: flex; align-items: center; justify-content: center; font-size: 24px;">👤</div>
+                    <div id="profilePic" style="width: 60px; height: 60px; border-radius: 50%; background: #22c55e; margin: 0 auto 10px; display: flex; align-items: center; justify-content: center; color: black; font-weight: bold; font-size: 24px;">U</div>
                     <div id="profileName" style="color: white; font-weight: 600; margin-bottom: 4px;">User</div>
                     <div id="profileEmail" style="color: #a0a5b0; font-size: 12px;">email@example.com</div>
                 </div>
@@ -1000,219 +1008,141 @@
 
         // Load app state
         function loadAppState() {
-            const savedKey = localStorage.getItem('q_key');
-            const savedModel = localStorage.getItem('q_model');
-            const savedTheme = localStorage.getItem('q_theme');
-            const savedUser = localStorage.getItem('q_user');
-            const savedChats = localStorage.getItem('q_chats');
+            const theme = localStorage.getItem('q_theme') || 'dark';
+            document.getElementById('darkMode').checked = theme === 'dark';
+            if (theme === 'light') document.body.classList.add('light-mode');
 
-            if (savedKey) document.getElementById('apiKey').value = savedKey;
-            if (savedModel) document.getElementById('modelName').value = savedModel;
-            if (savedTheme === 'light') {
-                document.body.classList.add('light-mode');
-                document.getElementById('darkMode').checked = false;
-            } else {
-                document.getElementById('darkMode').checked = true;
-            }
-            if (savedUser) {
-                currentUser = JSON.parse(savedUser);
-                updateProfileUI();
-            }
+            const savedChats = localStorage.getItem('q_chats');
             if (savedChats) allChats = JSON.parse(savedChats);
 
-            document.getElementById('aiInput').addEventListener('keypress', (e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    sendMessage();
-                }
-            });
-        }
-
-        // Voice recognition setup
-        function setupVoiceRecognition() {
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (SpeechRecognition) {
-                voiceRecognition = new SpeechRecognition();
-                voiceRecognition.continuous = false;
-                voiceRecognition.interimResults = true;
-                voiceRecognition.onresult = (event) => {
-                    let interim = '';
-                    for (let i = event.resultIndex; i < event.results.length; i++) {
-                        const transcript = event.results[i][0].transcript;
-                        if (event.results[i].isFinal) {
-                            document.getElementById('aiInput').value += ' ' + transcript;
-                        } else {
-                            interim += transcript;
-                        }
-                    }
-                };
-                voiceRecognition.onend = () => {
-                    isRecording = false;
-                    document.getElementById('voiceBtn').style.background = '';
-                };
+            const savedUser = localStorage.getItem('q_user');
+            if (savedUser) {
+                currentUser = JSON.parse(savedUser);
+                showAuthProfile();
             }
         }
 
-        function toggleVoiceInput() {
-            if (!voiceRecognition) {
-                alert('Voice input not supported on this browser');
-                return;
-            }
-            if (isRecording) {
-                voiceRecognition.stop();
-            } else {
-                voiceRecognition.start();
-                isRecording = true;
-                document.getElementById('voiceBtn').style.background = 'rgba(239, 68, 68, 0.3)';
-            }
+        // Menu toggle
+        function toggleMenu() {
+            const dropdown = document.getElementById('menuDropdown');
+            dropdown.classList.toggle('active');
         }
 
-        function triggerFileUpload() {
-            document.getElementById('fileInput').click();
+        // Chat functions
+        function newChat() {
+            currentChatId = Date.now().toString();
+            allChats[currentChatId] = { id: currentChatId, messages: [], created: new Date().toISOString() };
+            document.getElementById('chatDisplay').innerHTML = '';
+            document.getElementById('welcomeScreen').style.display = 'none';
+            document.getElementById('chatDisplay').style.display = 'flex';
+            document.getElementById('menuDropdown').classList.remove('active');
+            saveChatState();
         }
 
-        function handleFileUpload(event) {
-            const file = event.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const filename = file.name;
-                    document.getElementById('aiInput').value = `[File: ${filename}] `;
-                };
-                reader.readAsText(file);
-            }
-        }
+        function sendMessage() {
+            const input = document.getElementById('aiInput');
+            const msg = input.value.trim();
+            if (!msg) return;
 
-        // Rate limiting
-        function checkRateLimit() {
+            // Check rate limit
             const now = Date.now();
             if (now - rateLimitCounter.timestamp > RATE_LIMIT.window) {
-                rateLimitCounter = { count: 1, timestamp: now };
-                return true;
+                rateLimitCounter = { count: 0, timestamp: now };
             }
-            rateLimitCounter.count++;
-            return rateLimitCounter.count <= RATE_LIMIT.max;
-        }
-
-        // Menu
-        function toggleMenu() {
-            document.getElementById('menuDropdown').classList.toggle('active');
-        }
-
-        function closeMenuAndOverlay() {
-            document.getElementById('menuDropdown').classList.remove('active');
-        }
-
-        // Chat management
-        function newChat() {
-            closeMenuAndOverlay();
-            currentChatId = Date.now().toString();
-            allChats[currentChatId] = { messages: [], timestamp: new Date().toLocaleString(), title: 'New Chat' };
-            document.getElementById('welcomeScreen').style.display = 'flex';
-            document.getElementById('chatDisplay').style.display = 'none';
-            document.getElementById('aiInput').value = '';
-            document.getElementById('aiInput').focus();
-            saveChats();
-        }
-
-        function openHistory() {
-            closeMenuAndOverlay();
-            document.getElementById('historyOverlay').classList.add('active');
-            updateHistoryList();
-        }
-
-        function closeHistory() {
-            document.getElementById('historyOverlay').classList.remove('active');
-        }
-
-        function updateHistoryList() {
-            const historyList = document.getElementById('historyList');
-            if (Object.keys(allChats).length === 0) {
-                historyList.innerHTML = '<div class="list-empty">No chat history yet</div>';
+            if (rateLimitCounter.count >= RATE_LIMIT.max) {
+                alert('Rate limited. Please wait before sending more messages.');
                 return;
             }
+            rateLimitCounter.count++;
 
-            historyList.innerHTML = Object.entries(allChats)
-                .sort((a, b) => parseInt(b[0]) - parseInt(a[0]))
-                .map(([id, chat]) => `
-                    <div class="list-item" onclick="loadChat('${id}')">
-                        <span>${chat.title || chat.messages[0]?.content?.substring(0, 30) || 'Empty Chat'}</span>
-                        <span style="font-size: 11px;">${chat.timestamp}</span>
-                    </div>
-                `).join('');
+            if (!currentChatId) newChat();
+
+            // Add user message
+            const userMsg = document.createElement('div');
+            userMsg.className = 'chat-msg user-msg';
+            userMsg.textContent = msg;
+            document.getElementById('chatDisplay').appendChild(userMsg);
+            input.value = '';
+
+            // Show typing indicator
+            const typingDiv = document.createElement('div');
+            typingDiv.className = 'chat-msg ai-msg';
+            typingDiv.innerHTML = '<div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>';
+            document.getElementById('chatDisplay').appendChild(typingDiv);
+
+            // Save message
+            allChats[currentChatId].messages.push({ role: 'user', content: msg });
+
+            // Simulate API call
+            setTimeout(() => {
+                typingDiv.remove();
+                const aiMsg = document.createElement('div');
+                aiMsg.className = 'chat-msg ai-msg';
+                aiMsg.textContent = 'This is a demo response. Connect your API for real AI responses.';
+                document.getElementById('chatDisplay').appendChild(aiMsg);
+                allChats[currentChatId].messages.push({ role: 'assistant', content: 'Demo response' });
+                saveChatState();
+            }, 1500);
         }
 
-        function loadChat(chatId) {
-            currentChatId = chatId;
-            const chat = allChats[chatId];
-            document.getElementById('welcomeScreen').style.display = 'none';
-            document.getElementById('chatDisplay').style.display = 'block';
-            document.getElementById('chatDisplay').innerHTML = '';
-
-            chat.messages.forEach(msg => {
-                displayMessage(msg.content, msg.role === 'user');
-            });
-
-            document.getElementById('chatDisplay').scrollTop = document.getElementById('chatDisplay').scrollHeight;
-            document.getElementById('aiInput').value = '';
-            document.getElementById('aiInput').focus();
-            closeHistory();
-        }
-
-        function saveChats() {
+        function saveChatState() {
             localStorage.setItem('q_chats', JSON.stringify(allChats));
         }
 
-        // Authentication
+        // Auth functions
         function openAuth() {
-            closeMenuAndOverlay();
             document.getElementById('authOverlay').classList.add('active');
-            updateAuthUI();
+            document.getElementById('menuDropdown').classList.remove('active');
+            if (currentUser) {
+                showAuthProfile();
+            } else {
+                showAuthContent();
+            }
         }
 
         function closeAuth() {
             document.getElementById('authOverlay').classList.remove('active');
         }
 
-        function updateAuthUI() {
+        function showAuthContent() {
+            document.getElementById('authContent').style.display = 'block';
+            document.getElementById('authProfile').style.display = 'none';
+        }
+
+        function showAuthProfile() {
+            document.getElementById('authContent').style.display = 'none';
+            document.getElementById('authProfile').style.display = 'block';
             if (currentUser) {
-                document.getElementById('authContent').style.display = 'none';
-                document.getElementById('authProfile').style.display = 'block';
                 document.getElementById('profileName').textContent = currentUser.name || 'User';
-                document.getElementById('profileEmail').textContent = currentUser.email || '';
-            } else {
-                document.getElementById('authContent').style.display = 'block';
-                document.getElementById('authProfile').style.display = 'none';
+                document.getElementById('profileEmail').textContent = currentUser.email || 'email@example.com';
+                document.getElementById('profilePic').textContent = (currentUser.name || 'U').charAt(0).toUpperCase();
             }
         }
 
         function loginWithEmail() {
-            const name = document.getElementById('authName').value;
-            const email = document.getElementById('authEmail').value;
+            const name = document.getElementById('authName').value.trim();
+            const email = document.getElementById('authEmail').value.trim();
             if (!name || !email) {
-                alert('Please fill all fields');
+                alert('Please fill in all fields');
                 return;
             }
-            currentUser = { name, email, id: Date.now().toString() };
+            currentUser = { name, email };
             localStorage.setItem('q_user', JSON.stringify(currentUser));
-            updateAuthUI();
+            showAuthProfile();
         }
 
         function loginWithGoogle() {
-            alert('🔐 Google Sign-In integration ready.\nAdd Firebase config to index.html for live authentication.');
-            currentUser = { name: 'Google User', email: 'user@google.com', id: Date.now().toString() };
-            localStorage.setItem('q_user', JSON.stringify(currentUser));
-            updateAuthUI();
+            alert('Google Sign-In would be implemented here with proper OAuth flow');
         }
 
         function logoutUser() {
             currentUser = null;
             localStorage.removeItem('q_user');
-            updateAuthUI();
+            showAuthContent();
         }
 
         function deleteAccount() {
-            if (confirm('Are you sure? This will delete your account permanently.')) {
+            if (confirm('Are you sure? This cannot be undone.')) {
                 currentUser = null;
                 allChats = {};
                 localStorage.clear();
@@ -1220,36 +1150,68 @@
             }
         }
 
-        // Settings
+        // History functions
+        function openHistory() {
+            document.getElementById('historyOverlay').classList.add('active');
+            document.getElementById('menuDropdown').classList.remove('active');
+            const historyList = document.getElementById('historyList');
+            historyList.innerHTML = '';
+            if (Object.keys(allChats).length === 0) {
+                historyList.innerHTML = '<div class="list-empty">No chat history yet</div>';
+            } else {
+                Object.values(allChats).forEach(chat => {
+                    const item = document.createElement('div');
+                    item.className = 'list-item';
+                    const title = chat.messages[0]?.content.substring(0, 30) || 'Chat ' + chat.id;
+                    item.innerHTML = `<span>${title}</span><span style="font-size: 11px; color: #a0a5b0;">${new Date(chat.created).toLocaleDateString()}</span>`;
+                    item.style.cursor = 'pointer';
+                    item.onclick = () => {
+                        currentChatId = chat.id;
+                        document.getElementById('chatDisplay').innerHTML = '';
+                        document.getElementById('welcomeScreen').style.display = 'none';
+                        document.getElementById('chatDisplay').style.display = 'flex';
+                        chat.messages.forEach(msg => {
+                            const msgDiv = document.createElement('div');
+                            msgDiv.className = `chat-msg ${msg.role === 'user' ? 'user-msg' : 'ai-msg'}`;
+                            msgDiv.textContent = msg.content;
+                            document.getElementById('chatDisplay').appendChild(msgDiv);
+                        });
+                        closeHistory();
+                    };
+                    historyList.appendChild(item);
+                });
+            }
+        }
+
+        function closeHistory() {
+            document.getElementById('historyOverlay').classList.remove('active');
+        }
+
+        // Settings functions
         function openSettings() {
-            closeMenuAndOverlay();
             document.getElementById('settingsOverlay').classList.add('active');
+            document.getElementById('menuDropdown').classList.remove('active');
         }
 
         function closeSettings() {
             document.getElementById('settingsOverlay').classList.remove('active');
         }
 
+        function saveSettings() {
+            const apiKey = document.getElementById('apiKey').value;
+            const modelName = document.getElementById('modelName').value;
+            if (apiKey) localStorage.setItem('q_apiKey', apiKey);
+            if (modelName) localStorage.setItem('q_model', modelName);
+            alert('Settings saved!');
+            closeSettings();
+        }
+
         function changeLanguage() {
             const lang = document.getElementById('languageSelect').value;
             localStorage.setItem('q_language', lang);
-            alert('Language changed to: ' + lang);
         }
 
-        function saveSettings() {
-            const key = document.getElementById('apiKey').value;
-            const model = document.getElementById('modelName').value;
-            if (!key.trim()) {
-                alert('Please enter API Key!');
-                return;
-            }
-            localStorage.setItem('q_key', key);
-            localStorage.setItem('q_model', model);
-            closeSettings();
-            alert('✅ Settings saved!');
-        }
-
-        // Upgrade plan
+        // Upgrade functions
         function openUpgrade() {
             document.getElementById('upgradeOverlay').classList.add('active');
         }
@@ -1269,126 +1231,63 @@
                 alert('Please select a plan first');
                 return;
             }
-            alert(`✅ Thanks for upgrading to ${selectedPlan}!\nThis is a demo. Use Stripe API for real payments.`);
-            localStorage.setItem('q_subscription', selectedPlan);
-            closeUpgrade();
+            alert(`Processing purchase for ${selectedPlan} plan. Integrate with Stripe/PayPal here.`);
         }
 
-        // Chat messaging
-        async function sendMessage() {
-            const input = document.getElementById('aiInput');
-            const text = input.value.trim();
-            if (!text) return;
+        // Voice input
+        function setupVoiceRecognition() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (SpeechRecognition) {
+                voiceRecognition = new SpeechRecognition();
+                voiceRecognition.onresult = (event) => {
+                    const transcript = Array.from(event.results)
+                        .map(result => result[0].transcript)
+                        .join('');
+                    document.getElementById('aiInput').value = transcript;
+                };
+            }
+        }
 
-            if (!checkRateLimit()) {
-                alert('⚠️ Rate limit exceeded. Please wait before sending more messages.');
+        function toggleVoiceInput() {
+            if (!voiceRecognition) {
+                alert('Voice input not supported in your browser');
                 return;
             }
-
-            const key = localStorage.getItem('q_key');
-            if (!key) {
-                alert('⚠️ Set API Key in Settings first!');
-                openSettings();
-                return;
-            }
-
-            // Sanitize input
-            const sanitizedText = text.replace(/<[^>]*>/g, '').substring(0, 1000);
-
-            if (!currentChatId) {
-                currentChatId = Date.now().toString();
-                allChats[currentChatId] = { messages: [], timestamp: new Date().toLocaleString(), title: 'Chat' };
-            }
-
-            document.getElementById('welcomeScreen').style.display = 'none';
-            document.getElementById('chatDisplay').style.display = 'block';
-
-            displayMessage(sanitizedText, true);
-            allChats[currentChatId].messages.push({ role: 'user', content: sanitizedText });
-            input.value = '';
-
-            const chatDisplay = document.getElementById('chatDisplay');
-            const aiMsg = document.createElement('div');
-            aiMsg.className = 'chat-msg ai-msg';
-            aiMsg.innerHTML = '<div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>';
-            chatDisplay.appendChild(aiMsg);
-            chatDisplay.scrollTop = chatDisplay.scrollHeight;
-
-            try {
-                const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${key}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        model: localStorage.getItem('q_model') || 'deepseek/deepseek-r1:free',
-                        messages: [{ role: 'user', content: sanitizedText }],
-                        stream: false
-                    })
-                });
-
-                const data = await res.json();
-                if (!data.choices || !data.choices[0]) throw new Error('Invalid response');
-
-                const response = data.choices[0].message.content;
-                aiMsg.innerHTML = '';
-                displayMessage(response, false, aiMsg);
-                allChats[currentChatId].messages.push({ role: 'assistant', content: response });
-            } catch (error) {
-                aiMsg.innerHTML = '❌ ' + (error.message || 'Connection error');
-            }
-
-            saveChats();
-            chatDisplay.scrollTop = chatDisplay.scrollHeight;
-            input.focus();
-        }
-
-        function displayMessage(text, isUser, container = null) {
-            const chatDisplay = document.getElementById('chatDisplay');
-            if (!container) {
-                container = document.createElement('div');
-                chatDisplay.appendChild(container);
-            }
-            
-            container.className = `chat-msg ${isUser ? 'user-msg' : 'ai-msg'}`;
-            container.innerHTML = `
-                <div>${(isUser ? 'You' : '🤖 Quantarion')}: ${text}</div>
-                <div class="msg-actions">
-                    <button class="msg-action-btn" onclick="copyMessage(this)">📋 Copy</button>
-                    ${!isUser ? '<button class="msg-action-btn" onclick="shareMessage(this)">🔗 Share</button>' : ''}
-                </div>
-            `;
-        }
-
-        function copyMessage(btn) {
-            const text = btn.parentElement.parentElement.querySelector('div').textContent;
-            navigator.clipboard.writeText(text);
-            btn.textContent = '✅ Copied';
-            setTimeout(() => btn.textContent = '📋 Copy', 2000);
-        }
-
-        function shareMessage(btn) {
-            const text = btn.parentElement.parentElement.querySelector('div').textContent;
-            if (navigator.share) {
-                navigator.share({ text });
+            if (isRecording) {
+                voiceRecognition.stop();
+                isRecording = false;
+                document.getElementById('voiceBtn').style.background = 'rgba(255, 255, 255, 0.1)';
             } else {
-                alert('Share not supported. Copied to clipboard instead.');
-                navigator.clipboard.writeText(text);
+                voiceRecognition.start();
+                isRecording = true;
+                document.getElementById('voiceBtn').style.background = 'rgba(34, 197, 94, 0.3)';
             }
         }
 
+        // File upload
+        function triggerFileUpload() {
+            document.getElementById('fileInput').click();
+        }
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                alert(`File selected: ${file.name}. File upload handler not implemented.`);
+            }
+        }
+
+        // URL params check
         function checkURLParams() {
             const params = new URLSearchParams(window.location.search);
-            const action = params.get('action');
-            if (action === 'new-chat') newChat();
-            else if (action === 'history') openHistory();
-            else if (action === 'settings') openSettings();
+            if (params.get('action') === 'new-chat') {
+                newChat();
+            }
         }
 
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('.menu-three-dots') && !e.target.closest('.menu-dropdown')) {
-                closeMenuAndOverlay();
+        // Enter key to send
+        document.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && e.target.id === 'aiInput') {
+                sendMessage();
             }
         });
     </script>
